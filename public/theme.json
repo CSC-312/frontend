@@ -1,5 +1,9 @@
 {
-  "custom_fonts": [],
+  "custom_fonts": [
+    { "name": "Geist", "src": "/fonts/Geist/Geist-Variable.woff2", "weight": "100 900", "style": "normal" },
+    { "name": "Castoro", "src": "/fonts/Castoro/Castoro-Regular.woff2", "weight": "400", "style": "normal" },
+    { "name": "Google Sans Code", "src": "/fonts/GoogleSansCode/GoogleSansCode-Regular.woff2", "weight": "400", "style": "normal" }
+  ],
   "variables": {
     "light": {
       "--background": "0 0% 100%",
