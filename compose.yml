@@ -9,3 +9,13 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-postgres}
     ports:
       - ${POSTGRES_PORT:-5432}:5432
+  ollama:
+    image: alpine/ollama:latest
+    ports:
+      - 11434:11434
+    volumes:
+      - ~/.ollama/root/.ollama:/var/lib/ollama
+    entrypoint: /bin/sh
+    command: -c "ollama serve & sleep 5 && ollama pull qwen3:0.6b && wait"
+volumes:
+  ollama-data:
