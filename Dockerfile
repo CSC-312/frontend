@@ -1,22 +1,41 @@
-# Use an official Python image
-FROM python:3.12-slim
+# ---- Node.js stage for Prisma ----
+FROM node:20-alpine AS node_prisma
 
-# Set work directory
 WORKDIR /app
 
-# Copy requirements (if you have requirements.txt)
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package*.json ./
+RUN npm install
 
-# Or, if you use pyproject.toml (PDM/Poetry), copy and install accordingly
-# COPY pyproject.toml ./
-# RUN pip install pdm && pdm install
+# ---- Python stage ----
+FROM python:3.12-slim-bookworm
 
-# Copy the rest of your app
-COPY . .
+# Install uv (Python package manager)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Expose the port Chainlit uses
+WORKDIR /app
+
+# Copy Python dependencies
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked
+
+# Add a non-root user
+RUN useradd -m -d /home/app -s /bin/bash app
+USER app
+
+# Copy app code (after switching to user for correct permissions)
+COPY --chown=app:app . .
+
+# Copy node_modules and Prisma client from Node stage
+COPY --from=node_prisma /app/node_modules ./node_modules
+COPY --from=node_prisma /app/package.json ./package.json
+COPY --from=node_prisma /app/package-lock.json ./package-lock.json
+
+# Generate Prisma client and run migrations
+RUN npx prisma generate
+RUN npx prisma migrate deploy
+
+ENV PYTHONPATH=/app
+
 EXPOSE 8000
 
-# Run Chainlit app
 CMD ["chainlit", "run", "frontend/main.py", "--host", "0.0.0.0"]
