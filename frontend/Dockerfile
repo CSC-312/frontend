@@ -1,44 +1,35 @@
-# ---- Node.js stage for Prisma ----
-FROM node:20-alpine AS node_prisma
-
-WORKDIR /app
-
-# Copy Node dependencies first for caching
-COPY package*.json ./
-RUN npm install
-
-# ---- Python stage ----
 FROM python:3.12-slim-bookworm
 
-# Install uv (Python package manager)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Install Node.js and npm directly from NodeSource
+RUN apt-get update && apt-get install -y curl ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install uv and set up Python environment
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
-# Copy Python dependencies
+# Copy dependency files
+COPY package*.json ./
 COPY pyproject.toml uv.lock ./
+COPY prisma ./prisma/
+
+# Install Node.js dependencies and generate Prisma client
+RUN npm ci && npx prisma generate
+
+# Sync Python dependencies (install them in virtual environment)
 RUN uv sync --locked
 
-# Add a non-root user
+# Create non-root user
 RUN useradd -m -d /home/app -s /bin/bash app
 USER app
 
-# Copy app code
+# Copy application code
 COPY --chown=app:app . .
 
-# Copy Node modules from Node stage
-COPY --from=node_prisma /app/node_modules ./node_modules
-COPY --from=node_prisma /app/package.json ./package.json
-COPY --from=node_prisma /app/package-lock.json ./package-lock.json
-
-# Generate Prisma client (does NOT need DB)
-RUN npx prisma generate
-
 ENV PYTHONPATH=/app
-EXPOSE 8000
 
-# Entrypoint to run migrations automatically and start app
-ENTRYPOINT ["sh", "-c", "\
-  npx prisma migrate deploy && \
-  chainlit run frontend/main.py --host 0.0.0.0 \
-"]
+# SOLUTION 1: Use the virtual environment's binary directly
+CMD npx prisma migrate deploy && /app/.venv/bin/chainlit run main.py

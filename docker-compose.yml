@@ -10,25 +10,44 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   ollama:
     image: ollama/ollama
     ports:
       - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
 
   chainlit:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    env_file:
+    - .env
     environment:
       DATABASE_URL: postgres://postgres:root@postgres:5432/postgres
       OLLAMA_HOST: http://ollama:11434
-      # Add other env vars as needed
+      # OAuth Google Configuration
+      OAUTH_GOOGLE_CLIENT_ID: "87184027322-qt2bdjltrvovfrjj421me8mgprm3s7g6.apps.googleusercontent.com"
+      OAUTH_GOOGLE_CLIENT_SECRET: "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"
+      OAUTH_GOOGLE_REDIRECT_URI: "http://localhost:8000/auth/google/callback"
+      CHAINLIT_AUTH_SECRET: "L16qZh:90g43=e9uLsZB@b,N$^c.t5:2-G>>avT%qzVN0/kilc^Y^omu>?8~LFUs"
+      # Enable OAuth
+      OAUTH_PROVIDERS: google
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - ollama
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  ollama_data:
