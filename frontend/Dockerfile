@@ -3,6 +3,7 @@ FROM node:20-alpine AS node_prisma
 
 WORKDIR /app
 
+# Copy Node dependencies first for caching
 COPY package*.json ./
 RUN npm install
 
@@ -22,20 +23,22 @@ RUN uv sync --locked
 RUN useradd -m -d /home/app -s /bin/bash app
 USER app
 
-# Copy app code (after switching to user for correct permissions)
+# Copy app code
 COPY --chown=app:app . .
 
-# Copy node_modules and Prisma client from Node stage
+# Copy Node modules from Node stage
 COPY --from=node_prisma /app/node_modules ./node_modules
 COPY --from=node_prisma /app/package.json ./package.json
 COPY --from=node_prisma /app/package-lock.json ./package-lock.json
 
-# Generate Prisma client and run migrations
+# Generate Prisma client (does NOT need DB)
 RUN npx prisma generate
-RUN npx prisma migrate deploy
 
 ENV PYTHONPATH=/app
-
 EXPOSE 8000
 
-CMD ["chainlit", "run", "frontend/main.py", "--host", "0.0.0.0"]
+# Entrypoint to run migrations automatically and start app
+ENTRYPOINT ["sh", "-c", "\
+  npx prisma migrate deploy && \
+  chainlit run frontend/main.py --host 0.0.0.0 \
+"]
